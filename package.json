@@ -1,0 +1,22 @@
+{
+  "name": "op-fee-audit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Recomputes every OP Stack transaction's L1 data fee from its own bytes and the Fjord formula, FastLZ included, and checks the receipts agree",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "op-fee-audit": "src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "node --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  }
+}
