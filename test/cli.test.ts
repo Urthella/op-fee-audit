@@ -64,6 +64,15 @@ function run(...args: string[]): Promise<{ code: number; out: string }> {
 }
 const paying = blocks.flatMap((b) => b.transactions).filter((t) => t.type !== "0x7e");
 
+/** Runs with `--chain` presets, each pointed at the fake node through its environment variable. */
+function runChains(chains: string[], ...args: string[]): Promise<{ code: number; stdout: string; stderr: string }> {
+  const env = { ...process.env };
+  for (const c of chains) env[`OP_FEE_AUDIT_RPC_${c.toUpperCase().replaceAll("-", "_")}`] = RPC;
+  return new Promise((resolve) => {
+    execFile(process.execPath, [MAIN, ...args], { env }, (error, stdout, stderr) => resolve({ code: error ? Number(error.code) : 0, stdout, stderr }));
+  });
+}
+
 test("audits the saved Base blocks, exit 0", async () => {
   const { code, out } = await run("--blocks", String(blocks.length));
   assert.equal(code, 0, out);
@@ -124,7 +133,52 @@ test("a node that rate-limits inside its JSON-RPC replies is asked again", async
   assert.equal(rateLimits, 0);
 });
 
+test("--chain base audits the node its environment variable names", async () => {
+  const { code, stdout, stderr } = await runChains(["base"], "--chain", "base", "--blocks", String(blocks.length));
+  assert.equal(code, 0, stderr);
+  assert.match(stdout, new RegExp(`^${blocks.length} blocks on Base \\(chain 8453\\), ${blocks[0].number} to ${latest}: `));
+});
+
+test("a preset whose node serves another chain fails, and the other chains still run", async () => {
+  const { code, stdout, stderr } = await runChains(["base", "optimism"], "--chain", "optimism,base", "--blocks", "2");
+  assert.equal(code, 2, stderr);
+  assert.match(stderr, /op-fee-audit: optimism: the node serves chain 8453, not OP Mainnet \(chain 10\)/);
+  assert.match(stdout, /^2 blocks on Base \(chain 8453\)/);
+  assert.doesNotMatch(stderr, /127\.0\.0\.1/, "the URL may carry an API key: name the preset instead");
+});
+
+test("with several chains, --json prints an array, and a mismatch outranks a failed chain", async () => {
+  tamperedFee = paying.at(-1)!.hash;
+  try {
+    const { code, stdout, stderr } = await runChains(["base", "optimism"], "--chain", "base,optimism", "--blocks", "2", "--json");
+    assert.equal(code, 1, stderr);
+    const reports = JSON.parse(stdout);
+    assert.equal(reports.length, 1);
+    assert.equal(reports[0].chainId, 8453);
+    assert.equal(reports[0].mismatches[0].hash, tamperedFee);
+  } finally {
+    tamperedFee = undefined;
+  }
+});
+
+test("--chain all audits every mainnet and no testnet", async () => {
+  const mainnets = ["base", "optimism", "unichain", "ink", "soneium", "worldchain", "mode", "zora", "lisk"];
+  const { code, stdout, stderr } = await runChains([...mainnets, "op-sepolia", "base-sepolia"], "--chain", "all", "--blocks", "1");
+  assert.equal(code, 2, stderr);
+  assert.match(stdout, /^1 blocks on Base/);
+  const failed = [...stderr.matchAll(/op-fee-audit: ([a-z-]+): the node serves chain 8453/g)].map((m) => m[1]);
+  assert.deepEqual(failed, mainnets.slice(1));
+});
+
 test("bad arguments and an unreachable node exit 2", async () => {
+  for (const args of [["--chain", "mars"], ["--chain", "base,"]]) {
+    const bad = await runChains(["base"], ...args);
+    assert.equal(bad.code, 2, `${args}: ${bad.stderr}`);
+    assert.match(bad.stderr, /usage: op-fee-audit/);
+  }
+  const both = await runChains(["base"], "--chain", "base", "--rpc", RPC);
+  assert.equal(both.code, 2, both.stderr);
+  assert.match(both.stderr, /--rpc and --chain don't go together/);
   for (const args of [["--blocks", "0"], ["--blocks", "201"], ["--blocks", "many"]]) {
     const bad = await run(...args);
     assert.equal(bad.code, 2, `${args}: ${bad.out}`);

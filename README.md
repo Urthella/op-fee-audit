@@ -56,11 +56,43 @@ node src/main.ts --rpc https://optimism-rpc.publicnode.com --blocks 10
 
 - `--rpc URL` picks the node: `https://mainnet.base.org` by default. OP Mainnet's own public
   endpoint rate-limits hard, so publicnode's is easier for it.
+- `--chain NAME[,NAME...]` audits chains by name, each through a public RPC that worked, and checks
+  each node serves the chain it should:
+  - names: `base`, `optimism`, `unichain`, `ink`, `soneium`, `worldchain`, `mode`, `zora`, `lisk`,
+    `op-sepolia` and `base-sepolia`;
+  - `all` stands for the nine mainnets;
+  - `OP_FEE_AUDIT_RPC_BASE`, `OP_FEE_AUDIT_RPC_OP_SEPOLIA` and so on point a chain at your own
+    node. Errors name the chain, not the URL, so an API key in it stays out of logs.
 - `--blocks N` sets how many of the latest blocks to audit: 10 by default, up to 200.
-- `--json` prints the report as JSON.
+- `--json` prints the report as JSON, or an array of reports for several chains.
 
 Exit codes: 0 when every receipt matches, 1 when one doesn't, and 2 when transactions couldn't be
-checked or something failed.
+checked or something failed. Across several chains, a receipt that disagrees outranks a chain that
+couldn't be read.
+
+## Across the Superchain
+
+`node src/main.ts --chain all` on 2026-11-17, ten blocks each:
+
+| Chain | Receipts matched | Median L1 fee | Priced at the L1 base fee | Scalars: L1 base fee, blob base fee |
+|---|---:|---:|---:|---|
+| Base | 589 of 589 | 1.25 gwei | 43.5% | 2,269, 1,055,762 |
+| OP Mainnet | 394 of 394 | 1.74 gwei | 59.3% | 5,227, 1,014,213 |
+| Unichain | 40 of 40 | 2.5 gwei | 37.8% | 2,000, 900,000 |
+| Ink | 104 of 104 | 1.41 gwei | 59.9% | 4,424, 810,831 |
+| Soneium | 2 of 2 | 5.63 gwei | 61.5% | 9,736, 1,540,079 |
+| World Chain | 106 of 106 | 9.28 gwei | 72.0% | 8,697, 906,223 |
+| Mode | 1 of 1 | 99.99 gwei | 95.9% | 100,000, 1,014,213 |
+| Zora | no paying transactions | | | |
+| Lisk | no paying transactions | | | |
+
+- **The same formula, tuned per chain:** every chain runs Fjord's formula, but each sets its own
+  scalars, and they decide how much of the fee follows Ethereum's base fee rather than its blob
+  fee.
+- **Mode** sets its base fee scalar at 100,000, 44 times Base's, so its one transaction paid most
+  of its L1 fee at the L1 base fee.
+- **World Chain's** transactions were the largest, a median 404 bytes against Base's 118, and paid
+  the most of the busy chains.
 
 ## What it does
 
@@ -94,15 +126,17 @@ checked or something failed.
   - receipts fall back to one by one;
   - a tampered fee fails, and an unknown transaction type is reported unchecked;
   - a rate limit inside the JSON-RPC reply is retried;
+  - a chain name reaches the node its environment variable names, and `all` reaches every
+    mainnet and no testnet;
+  - a node serving the wrong chain fails while the other chains still run, and errors name the
+    chain rather than the URL;
   - bad arguments and an unreachable node exit 2.
-- **Mutation testing:** twenty-three deliberate bugs were planted one at a time, and the tests
-  caught every one.
+- **Mutation testing:** thirty deliberate bugs were planted one at a time, and the tests caught
+  every one.
 - **Live**, on 2026-11-17, every receipt matched:
-  - Base: 136 of 136;
-  - OP Mainnet: 510 of 510;
-  - Ink: 19 of 19;
-  - World Chain: 21 of 21;
-  - Soneium: 1 of 1.
+  - the nine mainnets above, 1,236 of 1,236;
+  - another run of OP Mainnet, 510 of 510;
+  - OP Sepolia, 5 of 5, and Base Sepolia, 63 of 63.
 
 ## Limits
 

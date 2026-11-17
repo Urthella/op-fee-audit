@@ -24,7 +24,20 @@ export interface Block {
   receipts: Receipt[];
 }
 
-export const CHAINS: Record<number, string> = { 10: "OP Mainnet", 8453: "Base", 130: "Unichain", 57073: "Ink", 1868: "Soneium", 480: "World Chain", 34443: "Mode", 7777777: "Zora", 1135: "Lisk", 11155420: "OP Sepolia", 84532: "Base Sepolia" };
+/** OP Stack chains: a name, the name `--chain` knows each by, and a public RPC that worked. */
+export const CHAINS: { chainId: number; name: string; preset: string; rpc: string; testnet?: true }[] = [
+  { chainId: 8453, name: "Base", preset: "base", rpc: "https://mainnet.base.org" },
+  { chainId: 10, name: "OP Mainnet", preset: "optimism", rpc: "https://optimism-rpc.publicnode.com" },
+  { chainId: 130, name: "Unichain", preset: "unichain", rpc: "https://mainnet.unichain.org" },
+  { chainId: 57073, name: "Ink", preset: "ink", rpc: "https://rpc-gel.inkonchain.com" },
+  { chainId: 1868, name: "Soneium", preset: "soneium", rpc: "https://rpc.soneium.org" },
+  { chainId: 480, name: "World Chain", preset: "worldchain", rpc: "https://worldchain-mainnet.g.alchemy.com/public" },
+  { chainId: 34443, name: "Mode", preset: "mode", rpc: "https://mainnet.mode.network" },
+  { chainId: 7777777, name: "Zora", preset: "zora", rpc: "https://rpc.zora.energy" },
+  { chainId: 1135, name: "Lisk", preset: "lisk", rpc: "https://lisk.drpc.org" },
+  { chainId: 11155420, name: "OP Sepolia", preset: "op-sepolia", rpc: "https://sepolia.optimism.io", testnet: true },
+  { chainId: 84532, name: "Base Sepolia", preset: "base-sepolia", rpc: "https://sepolia.base.org", testnet: true },
+];
 
 // Small: OP Mainnet's public endpoint answers bigger batches with HTTP 413.
 const RECEIPT_BATCH = 10;
@@ -78,7 +91,7 @@ const median = (values: bigint[]) => [...values].sort((a, b) => (a < b ? -1 : a 
 export function audit(chainId: number, blocks: Block[]): Report {
   const report: Report = {
     chainId,
-    chain: CHAINS[chainId] ?? `chain ${chainId}`,
+    chain: CHAINS.find((c) => c.chainId === chainId)?.name ?? `chain ${chainId}`,
     first: blocks[0]?.number ?? 0,
     last: blocks.at(-1)?.number ?? 0,
     transactions: 0,
